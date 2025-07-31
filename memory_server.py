@@ -6,8 +6,8 @@ A simple MCP server using FastMCP for storing personal information locally.
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 from pathlib import Path
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
@@ -20,17 +20,17 @@ class PersonalMemoryStorage:
         self.storage_file.parent.mkdir(parents=True, exist_ok=True)
         self.memory_data = self._load_memory()
 
-    def _load_memory(self) -> Dict[str, Any]:
+    def _load_memory(self) -> dict[str, Any]:
         """Load memory data from storage file"""
         if self.storage_file.exists():
             try:
-                with open(self.storage_file, "r", encoding="utf-8") as f:
+                with open(self.storage_file, encoding="utf-8") as f:
                     return json.load(f)
             except (json.JSONDecodeError, FileNotFoundError):
                 return self._initialize_memory()
         return self._initialize_memory()
 
-    def _initialize_memory(self) -> Dict[str, Any]:
+    def _initialize_memory(self) -> dict[str, Any]:
         """Initialize empty memory structure"""
         return {
             "personal_info": {},
@@ -52,16 +52,16 @@ class PersonalMemoryStorage:
     def _get_hierarchical_value(self, key: str) -> tuple[Any, bool]:
         """Get value from hierarchical structure, supporting both flat and dot notation"""
         personal_info = self.memory_data.get("personal_info", {})
-        
+
         # Check for direct key first (flat access)
         if key in personal_info:
             return personal_info[key], True
-            
-        # Check for dot notation (e.g., "book.title", "basic.name", "innovations.formula_ai.concept") 
+
+        # Check for dot notation (e.g., "book.title", "basic.name", "innovations.formula_ai.concept")
         if "." in key:
             parts = key.split(".")
             current_dict = personal_info
-            
+
             # Navigate through all parts
             for part in parts:
                 if isinstance(current_dict, dict) and part in current_dict:
@@ -71,30 +71,30 @@ class PersonalMemoryStorage:
             else:
                 # Successfully found the value
                 return current_dict, True
-        
+
         # Try to find in legacy flat structure by searching all categories
         for category_name, category_data in personal_info.items():
             if isinstance(category_data, dict):
                 # Search for legacy keys (e.g., "book_title" -> "title" in book category)
                 if key in category_data:
                     return category_data[key], True
-                    
+
                 # Search for keys with prefixes removed
                 for stored_key, stored_value in category_data.items():
                     if key == f"{category_name}_{stored_key}" or key == f"book_{stored_key}":
                         return stored_value, True
-        
+
         return None, False
 
     def _set_hierarchical_value(self, key: str, value: Any) -> bool:
         """Set value in hierarchical structure, supporting both flat and dot notation"""
         personal_info = self.memory_data.setdefault("personal_info", {})
-        
+
         # Handle dot notation (e.g., "book.title", "basic.name", "innovations.formula_ai.concept")
         if "." in key:
             parts = key.split(".")
             current_dict = personal_info
-            
+
             # Navigate through all parts except the last one
             for part in parts[:-1]:
                 if part not in current_dict:
@@ -102,62 +102,62 @@ class PersonalMemoryStorage:
                 elif not isinstance(current_dict[part], dict):
                     current_dict[part] = {}
                 current_dict = current_dict[part]
-            
+
             # Set the final value
             current_dict[parts[-1]] = value
             return True
-            
+
         # Handle legacy flat keys by mapping to appropriate categories
         legacy_mappings = {
             # Basic info
             "name": "basic.name",
-            "woonplaats": "basic.woonplaats", 
+            "woonplaats": "basic.woonplaats",
             "linkedin_profile": "basic.linkedin_profile",
             "email_infosupport": "basic.email_infosupport",
             "email_aigency": "basic.email_aigency",
-            
+
             # Career info
             "job_title": "career.job_title",
             "full_job_roles": "career.full_job_roles",
             "career_background": "career.career_background",
             "expertise": "career.expertise",
-            "expertise_areas": "career.expertise_areas", 
+            "expertise_areas": "career.expertise_areas",
             "research_interests": "career.research_interests",
         }
-        
+
         # Map book_ prefixed keys
         if key.startswith("book_"):
             clean_key = key[5:]  # Remove "book_" prefix
             return self._set_hierarchical_value(f"book.{clean_key}", value)
-            
-        # Map formula_ai_ prefixed keys  
+
+        # Map formula_ai_ prefixed keys
         if key.startswith("formula_ai_"):
             clean_key = key[11:]  # Remove "formula_ai_" prefix
             return self._set_hierarchical_value(f"innovations.formula_ai.{clean_key}", value)
-            
+
         # Map ai_experiment_canvas_ prefixed keys
         if key.startswith("ai_experiment_canvas_"):
-            clean_key = key[21:]  # Remove "ai_experiment_canvas_" prefix  
+            clean_key = key[21:]  # Remove "ai_experiment_canvas_" prefix
             return self._set_hierarchical_value(f"innovations.ai_experiment_canvas.{clean_key}", value)
-        
+
         # Check legacy mappings
         if key in legacy_mappings:
             return self._set_hierarchical_value(legacy_mappings[key], value)
-            
+
         # For unmapped keys, try to infer category or use misc
         # This allows for flexible addition of new categories
         suggested_category = self._suggest_category_for_key(key)
         if suggested_category:
             return self._set_hierarchical_value(f"{suggested_category}.{key}", value)
-            
+
         # If no suggestion, store in misc category and log for interactive categorization
         if "misc" not in personal_info:
             personal_info["misc"] = {}
         elif not isinstance(personal_info["misc"], dict):
             personal_info["misc"] = {}
-            
+
         personal_info["misc"][key] = value
-        
+
         # Add to pending categorization list
         if not hasattr(self, '_pending_categorization'):
             self._pending_categorization = []
@@ -166,37 +166,37 @@ class PersonalMemoryStorage:
             "value": value,
             "timestamp": datetime.now().isoformat()
         })
-        
+
         return True
 
     def _suggest_category_for_key(self, key: str) -> str:
         """Suggest appropriate category for a new key based on naming patterns"""
         key_lower = key.lower()
-        
+
         # Basic/contact related
         if any(pattern in key_lower for pattern in ['email', 'phone', 'address', 'contact', 'location']):
             return "basic"
-            
+
         # Career related
         if any(pattern in key_lower for pattern in ['job', 'work', 'career', 'role', 'position', 'company']):
             return "career"
-            
+
         # Book related
         if key_lower.startswith('book_') or any(pattern in key_lower for pattern in ['publication', 'isbn', 'publisher']):
             return "book"
-            
-        # Innovation/project related  
+
+        # Innovation/project related
         if any(pattern in key_lower for pattern in ['project', 'innovation', 'tool', 'framework', 'canvas', 'kaartspel', 'game']):
             return "innovations"
-            
+
         # Communication related
         if any(pattern in key_lower for pattern in ['communication', 'style', 'preference', 'podcast', 'speaking']):
             return "communication"
-            
+
         # Values/insights related
         if any(pattern in key_lower for pattern in ['value', 'insight', 'principle', 'belief', 'method']):
             return "values_insights"
-            
+
         # No clear category suggestion
         return None
 
@@ -204,21 +204,21 @@ class PersonalMemoryStorage:
         """Reorganize items from misc category into appropriate categories"""
         personal_info = self.memory_data.get("personal_info", {})
         misc_items = personal_info.get("misc", {})
-        
+
         if not misc_items:
             return {"status": "success", "message": "No misc items to reorganize", "moved": 0}
-        
+
         moved_items = []
         remaining_items = {}
-        
+
         for key, value in misc_items.items():
             suggested_category = self._suggest_category_for_key(key)
-            
+
             if suggested_category:
                 # Move to suggested category
                 if suggested_category not in personal_info:
                     personal_info[suggested_category] = {}
-                
+
                 personal_info[suggested_category][key] = value
                 moved_items.append({
                     "key": key,
@@ -228,7 +228,7 @@ class PersonalMemoryStorage:
             else:
                 # Keep in misc
                 remaining_items[key] = value
-        
+
         # Update misc with remaining items
         if remaining_items:
             personal_info["misc"] = remaining_items
@@ -236,10 +236,10 @@ class PersonalMemoryStorage:
             # Remove empty misc category
             if "misc" in personal_info:
                 del personal_info["misc"]
-        
+
         if moved_items:
             self._save_memory()
-        
+
         return {
             "status": "success",
             "message": f"Reorganized {len(moved_items)} items from misc",
@@ -254,17 +254,17 @@ class PersonalMemoryStorage:
         source_value, found = self._get_hierarchical_value(from_path)
         if not found:
             return {"status": "error", "message": f"Source item '{from_path}' not found"}
-        
+
         # Set to destination
         success = self._set_hierarchical_value(to_path, source_value)
         if not success:
             return {"status": "error", "message": f"Failed to set destination '{to_path}'"}
-        
+
         # Remove from source
         self._remove_hierarchical_value(from_path)
-        
+
         self._save_memory()
-        
+
         return {
             "status": "success",
             "message": f"Moved '{from_path}' to '{to_path}'",
@@ -274,18 +274,18 @@ class PersonalMemoryStorage:
     def _remove_hierarchical_value(self, key: str) -> bool:
         """Remove value from hierarchical structure"""
         personal_info = self.memory_data.get("personal_info", {})
-        
+
         if "." in key:
             parts = key.split(".")
             current_dict = personal_info
-            
+
             # Navigate to parent
             for part in parts[:-1]:
                 if isinstance(current_dict, dict) and part in current_dict:
                     current_dict = current_dict[part]
                 else:
                     return False
-            
+
             # Remove the final key
             if isinstance(current_dict, dict) and parts[-1] in current_dict:
                 del current_dict[parts[-1]]
@@ -295,27 +295,27 @@ class PersonalMemoryStorage:
             if key in personal_info:
                 del personal_info[key]
                 return True
-                
+
             # Search in categories
             for category_data in personal_info.values():
                 if isinstance(category_data, dict) and key in category_data:
                     del category_data[key]
                     return True
-        
+
         return False
 
     def get_pending_categorization(self) -> dict:
         """Get items that need categorization with suggested categories"""
         if not hasattr(self, '_pending_categorization'):
             return {"status": "success", "pending_items": [], "count": 0}
-        
+
         # Get current categories for suggestions
         personal_info = self.memory_data.get("personal_info", {})
         existing_categories = [cat for cat in personal_info.keys() if isinstance(personal_info[cat], dict)]
-        
+
         pending_with_suggestions = []
         for item in self._pending_categorization:
-            suggested = self._suggest_category_for_key(item["key"]) 
+            suggested = self._suggest_category_for_key(item["key"])
             pending_with_suggestions.append({
                 "key": item["key"],
                 "value": item["value"],
@@ -323,7 +323,7 @@ class PersonalMemoryStorage:
                 "suggested_category": suggested,
                 "existing_categories": existing_categories
             })
-        
+
         return {
             "status": "success",
             "pending_items": pending_with_suggestions,
@@ -335,7 +335,7 @@ class PersonalMemoryStorage:
         """Categorize a pending item by moving it to the specified category"""
         if not hasattr(self, '_pending_categorization'):
             return {"status": "error", "message": "No pending items to categorize"}
-        
+
         # Find the pending item
         item_found = None
         for i, item in enumerate(self._pending_categorization):
@@ -343,19 +343,19 @@ class PersonalMemoryStorage:
                 item_found = item
                 del self._pending_categorization[i]
                 break
-                
+
         if not item_found:
             return {"status": "error", "message": f"Pending item '{key}' not found"}
-        
+
         # Use provided key name or original key
         final_key = new_key_name if new_key_name else key
-        
+
         # Move from misc to target category
         result = self.move_personal_info_item(f"misc.{key}", f"{target_category}.{final_key}")
-        
+
         if result["status"] == "success":
             return {
-                "status": "success", 
+                "status": "success",
                 "message": f"Moved '{key}' to '{target_category}.{final_key}'",
                 "remaining_pending": len(getattr(self, '_pending_categorization', []))
             }
@@ -370,7 +370,7 @@ class PersonalMemoryStorage:
             return {"status": "success", "message": f"Cleared {count} pending items", "cleared": count}
         return {"status": "success", "message": "No pending items to clear", "cleared": 0}
 
-    def store_personal_info(self, key: str, value: Any) -> Dict[str, Any]:
+    def store_personal_info(self, key: str, value: Any) -> dict[str, Any]:
         """Store personal information with hierarchical support"""
         success = self._set_hierarchical_value(key, value)
         if success:
@@ -379,14 +379,14 @@ class PersonalMemoryStorage:
         else:
             return {"status": "error", "message": f"Failed to store {key}"}
 
-    def get_personal_info(self, key: Optional[str] = None) -> Dict[str, Any]:
+    def get_personal_info(self, key: str | None = None) -> dict[str, Any]:
         """Retrieve personal information with hierarchical support"""
         if key:
             value, found = self._get_hierarchical_value(key)
             return {"key": key, "value": value, "found": found}
         return {"personal_info": self.memory_data.get("personal_info", {})}
 
-    def store_preference(self, category: str, preference: str, value: Any) -> Dict[str, Any]:
+    def store_preference(self, category: str, preference: str, value: Any) -> dict[str, Any]:
         """Store a preference"""
         if category not in self.memory_data["preferences"]:
             self.memory_data["preferences"][category] = {}
@@ -397,7 +397,7 @@ class PersonalMemoryStorage:
             "message": f"Stored preference {category}.{preference}",
         }
 
-    def get_preferences(self, category: Optional[str] = None) -> Dict[str, Any]:
+    def get_preferences(self, category: str | None = None) -> dict[str, Any]:
         """Retrieve preferences"""
         if category:
             return {
@@ -408,8 +408,8 @@ class PersonalMemoryStorage:
         return {"preferences": self.memory_data["preferences"]}
 
     def add_memory(
-        self, content: str, tags: List[str] = None, context: str = None
-    ) -> Dict[str, Any]:
+        self, content: str, tags: list[str] = None, context: str = None
+    ) -> dict[str, Any]:
         """Add a memory entry"""
         memory_entry = {
             "id": len(self.memory_data["memories"]) + 1,
@@ -427,8 +427,8 @@ class PersonalMemoryStorage:
         }
 
     def search_memories(
-        self, query: str = None, tags: List[str] = None, limit: int = 10
-    ) -> Dict[str, Any]:
+        self, query: str = None, tags: list[str] = None, limit: int = 10
+    ) -> dict[str, Any]:
         """Search memories by content or tags"""
         results = []
         for memory in self.memory_data["memories"]:
@@ -451,8 +451,8 @@ class PersonalMemoryStorage:
         }
 
     def store_relationship(
-        self, name: str, relationship_type: str, details: Dict[str, Any] = None
-    ) -> Dict[str, Any]:
+        self, name: str, relationship_type: str, details: dict[str, Any] = None
+    ) -> dict[str, Any]:
         """Store information about a relationship"""
         relationship_data = {
             "type": relationship_type,
@@ -468,7 +468,7 @@ class PersonalMemoryStorage:
             "relationship": relationship_data,
         }
 
-    def get_relationships(self, name: Optional[str] = None) -> Dict[str, Any]:
+    def get_relationships(self, name: str | None = None) -> dict[str, Any]:
         """Retrieve relationship information"""
         if name:
             relationship = self.memory_data["relationships"].get(name)
@@ -485,7 +485,7 @@ class PersonalMemoryStorage:
         category: str = "general",
         deadline: str = None,
         priority: str = "medium",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Add a goal"""
         goal_entry = {
             "id": len(self.memory_data["goals"]) + 1,
@@ -500,7 +500,7 @@ class PersonalMemoryStorage:
         self._save_memory()
         return {"status": "success", "goal_id": goal_entry["id"], "goal": goal_entry}
 
-    def get_goals(self, status: str = None, category: str = None) -> Dict[str, Any]:
+    def get_goals(self, status: str = None, category: str = None) -> dict[str, Any]:
         """Retrieve goals with optional filtering"""
         filtered_goals = []
         for goal in self.memory_data["goals"]:
@@ -511,7 +511,7 @@ class PersonalMemoryStorage:
             filtered_goals.append(goal)
         return {"goals": filtered_goals, "count": len(filtered_goals)}
 
-    def update_goal_status(self, goal_id: int, status: str) -> Dict[str, Any]:
+    def update_goal_status(self, goal_id: int, status: str) -> dict[str, Any]:
         """Update goal status"""
         for goal in self.memory_data["goals"]:
             if goal["id"] == goal_id:
@@ -526,7 +526,7 @@ class PersonalMemoryStorage:
                 }
         return {"status": "error", "message": f"Goal {goal_id} not found"}
 
-    def get_memory_stats(self) -> Dict[str, Any]:
+    def get_memory_stats(self) -> dict[str, Any]:
         """Get statistics about stored memory"""
         goal_stats = {}
         for goal in self.memory_data["goals"]:
@@ -576,13 +576,13 @@ def get_preferences(category: str = None) -> dict:
 
 
 @mcp.tool()
-def add_memory(content: str, tags: List[str] = None, context: str = None) -> dict:
+def add_memory(content: str, tags: list[str] = None, context: str = None) -> dict:
     """Add a memory entry with optional tags and context"""
     return storage.add_memory(content, tags or [], context)
 
 
 @mcp.tool()
-def search_memories(query: str = None, tags: List[str] = None, limit: int = 10) -> dict:
+def search_memories(query: str = None, tags: list[str] = None, limit: int = 10) -> dict:
     """Search memories by content or tags"""
     return storage.search_memories(query, tags, limit)
 
