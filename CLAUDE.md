@@ -41,10 +41,10 @@ The entry point is correctly configured as `memory_server:main` in `pyproject.to
 - Manages 5 data categories: personal_info, preferences, memories, relationships, goals
 - Thread-safe file operations with automatic backup on save
 
-**FastMCP Integration** (`memory_server.py:490-561`)
-- 14 exposed tools for CRUD operations and data organization
+**FastMCP Integration** (`memory_server.py:614-656`)
+- 17 exposed tools for CRUD operations, data organization, and interactive categorization
 - Uses FastMCP library for efficient MCP protocol handling
-- Tools follow naming pattern: `store_*`, `get_*`, `add_*`, `update_*`, `search_*`, `reorganize_*`, `move_*`
+- Tools follow naming pattern: `store_*`, `get_*`, `add_*`, `update_*`, `search_*`, `reorganize_*`, `move_*`, `categorize_*`
 
 ### Data Structure
 
@@ -109,7 +109,11 @@ The entry point is correctly configured as `memory_server:main` in `pyproject.to
 **Data Organization Tools:**
 - **`reorganize_misc_items()`**: Automatically moves items from `misc` to appropriate categories based on keywords
 - **`move_personal_info_item(from_path, to_path)`**: Manually move items between locations
+- **`get_pending_categorization()`**: Lists items that need manual categorization with suggestions
+- **`categorize_pending_item(key, target_category, new_key_name)`**: Interactively categorize pending items
+- **`clear_pending_categorization()`**: Clear pending list (items stay in misc)
 - **Smart categorization**: New items automatically placed in logical categories
+- **Interactive prompts**: When items can't be auto-categorized, user gets prompted for placement
 - **Flexible structure**: Easy to add new categories via dot notation
 
 ## Testing Approach
@@ -124,6 +128,7 @@ Uses pytest with async support for testing MCP tools and storage operations.
 - Flexible categorization for new keys (`test_flexible_categorization`)
 - Misc items reorganization (`test_misc_reorganization`)
 - Manual item moving (`test_manual_item_move`)
+- Interactive categorization workflow (`test_interactive_categorization`)
 - Memory, goals, and preference management
 
 ## Data Storage

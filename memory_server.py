@@ -150,13 +150,23 @@ class PersonalMemoryStorage:
         if suggested_category:
             return self._set_hierarchical_value(f"{suggested_category}.{key}", value)
             
-        # If no suggestion, store in misc category
+        # If no suggestion, store in misc category and log for interactive categorization
         if "misc" not in personal_info:
             personal_info["misc"] = {}
         elif not isinstance(personal_info["misc"], dict):
             personal_info["misc"] = {}
             
         personal_info["misc"][key] = value
+        
+        # Add to pending categorization list
+        if not hasattr(self, '_pending_categorization'):
+            self._pending_categorization = []
+        self._pending_categorization.append({
+            "key": key,
+            "value": value,
+            "timestamp": datetime.now().isoformat()
+        })
+        
         return True
 
     def _suggest_category_for_key(self, key: str) -> str:
@@ -293,6 +303,72 @@ class PersonalMemoryStorage:
                     return True
         
         return False
+
+    def get_pending_categorization(self) -> dict:
+        """Get items that need categorization with suggested categories"""
+        if not hasattr(self, '_pending_categorization'):
+            return {"status": "success", "pending_items": [], "count": 0}
+        
+        # Get current categories for suggestions
+        personal_info = self.memory_data.get("personal_info", {})
+        existing_categories = [cat for cat in personal_info.keys() if isinstance(personal_info[cat], dict)]
+        
+        pending_with_suggestions = []
+        for item in self._pending_categorization:
+            suggested = self._suggest_category_for_key(item["key"]) 
+            pending_with_suggestions.append({
+                "key": item["key"],
+                "value": item["value"],
+                "timestamp": item["timestamp"],
+                "suggested_category": suggested,
+                "existing_categories": existing_categories
+            })
+        
+        return {
+            "status": "success",
+            "pending_items": pending_with_suggestions,
+            "count": len(pending_with_suggestions),
+            "existing_categories": existing_categories
+        }
+
+    def categorize_pending_item(self, key: str, target_category: str, new_key_name: str = None) -> dict:
+        """Categorize a pending item by moving it to the specified category"""
+        if not hasattr(self, '_pending_categorization'):
+            return {"status": "error", "message": "No pending items to categorize"}
+        
+        # Find the pending item
+        item_found = None
+        for i, item in enumerate(self._pending_categorization):
+            if item["key"] == key:
+                item_found = item
+                del self._pending_categorization[i]
+                break
+                
+        if not item_found:
+            return {"status": "error", "message": f"Pending item '{key}' not found"}
+        
+        # Use provided key name or original key
+        final_key = new_key_name if new_key_name else key
+        
+        # Move from misc to target category
+        result = self.move_personal_info_item(f"misc.{key}", f"{target_category}.{final_key}")
+        
+        if result["status"] == "success":
+            return {
+                "status": "success", 
+                "message": f"Moved '{key}' to '{target_category}.{final_key}'",
+                "remaining_pending": len(getattr(self, '_pending_categorization', []))
+            }
+        else:
+            return result
+
+    def clear_pending_categorization(self) -> dict:
+        """Clear all pending categorization items (they stay in misc)"""
+        if hasattr(self, '_pending_categorization'):
+            count = len(self._pending_categorization)
+            self._pending_categorization = []
+            return {"status": "success", "message": f"Cleared {count} pending items", "cleared": count}
+        return {"status": "success", "message": "No pending items to clear", "cleared": 0}
 
     def store_personal_info(self, key: str, value: Any) -> Dict[str, Any]:
         """Store personal information with hierarchical support"""
@@ -559,6 +635,24 @@ def reorganize_misc_items() -> dict:
 def move_personal_info_item(from_path: str, to_path: str) -> dict:
     """Move a personal info item from one location to another (e.g., 'misc.item' to 'innovations.item')"""
     return storage.move_personal_info_item(from_path, to_path)
+
+
+@mcp.tool()
+def get_pending_categorization() -> dict:
+    """Get items that were stored in misc and need categorization with suggestions"""
+    return storage.get_pending_categorization()
+
+
+@mcp.tool()
+def categorize_pending_item(key: str, target_category: str, new_key_name: str = None) -> dict:
+    """Categorize a pending item by moving it to the specified category"""
+    return storage.categorize_pending_item(key, target_category, new_key_name)
+
+
+@mcp.tool()
+def clear_pending_categorization() -> dict:
+    """Clear all pending categorization items (they stay in misc)"""
+    return storage.clear_pending_categorization()
 
 
 def main():

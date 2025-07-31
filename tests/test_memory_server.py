@@ -185,3 +185,51 @@ def test_manual_item_move(temp_storage):
     new_location = temp_storage.get_personal_info("basic.moved_item")
     assert new_location["found"] is True
     assert new_location["value"] == "test value"
+
+
+def test_interactive_categorization(temp_storage):
+    """Test interactive categorization workflow"""
+    # Add items that should trigger pending categorization
+    temp_storage.store_personal_info("mystery_item", "Unknown category")
+    temp_storage.store_personal_info("unclear_thing", "Needs categorization")
+    
+    # Check pending items
+    pending = temp_storage.get_pending_categorization()
+    assert pending["status"] == "success"
+    assert pending["count"] == 2
+    assert len(pending["pending_items"]) == 2
+    
+    # Verify pending item structure
+    first_item = pending["pending_items"][0] 
+    assert "key" in first_item
+    assert "value" in first_item
+    assert "timestamp" in first_item
+    assert "suggested_category" in first_item
+    assert "existing_categories" in first_item
+    
+    # Categorize one item
+    result = temp_storage.categorize_pending_item("mystery_item", "personal")
+    assert result["status"] == "success"
+    assert result["remaining_pending"] == 1
+    
+    # Verify item was moved
+    moved_item = temp_storage.get_personal_info("personal.mystery_item")
+    assert moved_item["found"] is True
+    assert moved_item["value"] == "Unknown category"
+    
+    # Verify it's no longer in misc
+    misc_item = temp_storage.get_personal_info("misc.mystery_item")
+    assert misc_item["found"] is False
+    
+    # Check updated pending list
+    updated_pending = temp_storage.get_pending_categorization()
+    assert updated_pending["count"] == 1
+    
+    # Clear remaining pending items
+    clear_result = temp_storage.clear_pending_categorization()
+    assert clear_result["status"] == "success"
+    assert clear_result["cleared"] == 1
+    
+    # Verify no more pending items
+    final_pending = temp_storage.get_pending_categorization()
+    assert final_pending["count"] == 0
