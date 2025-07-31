@@ -115,18 +115,24 @@ def test_backward_compatibility(temp_storage):
     assert retrieved["found"] is True
 
 
-def test_migration_functionality(temp_storage):
-    """Test that migration doesn't run on already hierarchical data"""
-    # Create hierarchical structure
-    temp_storage.store_personal_info("basic.name", "Test User")
-    temp_storage.store_personal_info("book.title", "Test Book")
+def test_flexible_categorization(temp_storage):
+    """Test flexible categorization for new keys"""
+    # Test automatic categorization
+    temp_storage.store_personal_info("phone_number", "+31612345678")
+    temp_storage.store_personal_info("new_project", "AI Coach Platform")
+    temp_storage.store_personal_info("core_principle", "Always be helpful")
     
-    # Verify structure is hierarchical
+    # Verify they end up in appropriate categories
     personal_info = temp_storage.memory_data["personal_info"]
-    assert "basic" in personal_info
-    assert isinstance(personal_info["basic"], dict)
-    assert personal_info["basic"]["name"] == "Test User"
     
-    assert "book" in personal_info  
-    assert isinstance(personal_info["book"], dict)
-    assert personal_info["book"]["title"] == "Test Book"
+    # Phone should go to basic
+    assert "basic" in personal_info
+    assert "phone_number" in personal_info["basic"]
+    
+    # Project should go to innovations  
+    assert "innovations" in personal_info
+    assert "new_project" in personal_info["innovations"]
+    
+    # Principle should go to values_insights
+    assert "values_insights" in personal_info
+    assert "core_principle" in personal_info["values_insights"]

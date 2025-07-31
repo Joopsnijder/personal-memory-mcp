@@ -19,8 +19,6 @@ class PersonalMemoryStorage:
         # Ensure the directory exists
         self.storage_file.parent.mkdir(parents=True, exist_ok=True)
         self.memory_data = self._load_memory()
-        # Migrate to hierarchical structure if needed
-        self._migrate_personal_info_structure()
 
     def _load_memory(self) -> Dict[str, Any]:
         """Load memory data from storage file"""
@@ -50,114 +48,6 @@ class PersonalMemoryStorage:
         with open(self.storage_file, "w", encoding="utf-8") as f:
             json.dump(self.memory_data, f, indent=2, ensure_ascii=False)
 
-    def _migrate_personal_info_structure(self):
-        """Migrate flat personal_info structure to hierarchical structure"""
-        personal_info = self.memory_data.get("personal_info", {})
-        
-        # Check if already migrated (has hierarchical structure)
-        hierarchical_categories = ["basic", "career", "book", "work_roles", "innovations", "communication", "values_insights"]
-        if any(k in hierarchical_categories and isinstance(v, dict) for k, v in personal_info.items()):
-            # Already hierarchical, no migration needed
-            return
-            
-        # Create hierarchical structure mapping
-        hierarchical_mapping = {
-            "basic": [
-                "name", "woonplaats", "linkedin_profile", "email_infosupport", "email_aigency"
-            ],
-            "career": [
-                "job_title", "full_job_roles", "career_background", "expertise", 
-                "expertise_areas", "research_interests"
-            ],
-            "book": [
-                "book_title", "book_subtitle", "book_isbn", "book_publisher", "book_year",
-                "book_edition", "book_format", "book_language", "book_category", 
-                "book_summary", "book_learning_outcomes", "book_keywords", 
-                "book_managementboek_url", "book_publisher_full", "book_boom_url",
-                "book_topics_detailed"
-            ],
-            "work_roles": [
-                "aigency_work", "research_center_focus", "dnb_coaching_role", 
-                "edih_advisory_role", "ai_governance_board_role", "raise_program_role"
-            ],
-            "innovations": [
-                "formula_ai_creator", "formula_ai_concept", "formula_ai_goals", 
-                "formula_ai_mechanics", "formula_ai_drs_package", "formula_ai_target_audience",
-                "ai_experiment_canvas_creator", "ai_experiment_canvas_structure", 
-                "ai_ideation_workshop_concept", "ai_design_week_process", "workshop_client_testimonials"
-            ],
-            "communication": [
-                "podcast_details", "writing_style", "communication_preferences", 
-                "critical_attitudes", "positive_attitudes", "personal_projects"
-            ],
-            "values_insights": [
-                "core_values", "key_insights", "methods_frameworks"
-            ]
-        }
-        
-        # Build new hierarchical structure
-        new_structure = {}
-        migrated_keys = set()
-        
-        for category, keys in hierarchical_mapping.items():
-            category_data = {}
-            for key in keys:
-                if key in personal_info:
-                    # Handle book keys by removing book_ prefix for cleaner structure
-                    if key.startswith("book_"):
-                        clean_key = key[5:]  # Remove "book_" prefix
-                        category_data[clean_key] = personal_info[key]
-                    else:
-                        category_data[key] = personal_info[key]
-                    migrated_keys.add(key)
-            
-            if category_data:
-                new_structure[category] = category_data
-        
-        # Handle special cases for innovations subcategories
-        if "innovations" in new_structure:
-            innovations_data = new_structure["innovations"]
-            formula_ai_data = {}
-            ai_canvas_data = {}
-            
-            # Group Formula AI related items
-            for key in list(innovations_data.keys()):
-                if key.startswith("formula_ai_"):
-                    clean_key = key[11:]  # Remove "formula_ai_" prefix
-                    formula_ai_data[clean_key] = innovations_data.pop(key)
-                elif key.startswith("ai_experiment_canvas_"):
-                    clean_key = key[21:]  # Remove "ai_experiment_canvas_" prefix
-                    ai_canvas_data[clean_key] = innovations_data.pop(key)
-                elif key in ["ai_experiment_canvas_creator"]:
-                    ai_canvas_data["creator"] = innovations_data.pop(key)
-                elif key in ["formula_ai_creator"]:
-                    formula_ai_data["creator"] = innovations_data.pop(key)
-            
-            # Add other workshop/design related items to ai_canvas
-            for key in ["ai_ideation_workshop_concept", "ai_design_week_process", "workshop_client_testimonials"]:
-                if key in innovations_data:
-                    ai_canvas_data[key] = innovations_data.pop(key)
-            
-            if formula_ai_data:
-                new_structure["innovations"]["formula_ai"] = formula_ai_data
-            if ai_canvas_data:
-                new_structure["innovations"]["ai_experiment_canvas"] = ai_canvas_data
-            
-            # Remove empty innovations if no other data
-            if not innovations_data and "formula_ai" in new_structure["innovations"] or "ai_experiment_canvas" in new_structure["innovations"]:
-                new_structure["innovations"] = {k: v for k, v in new_structure["innovations"].items() if k not in innovations_data}
-        
-        # Add any remaining unmapped keys to a misc category
-        remaining_keys = set(personal_info.keys()) - migrated_keys
-        if remaining_keys:
-            misc_data = {key: personal_info[key] for key in remaining_keys}
-            new_structure["misc"] = misc_data
-        
-        # Update the personal_info with new structure
-        if new_structure:
-            self.memory_data["personal_info"] = new_structure
-            self._save_memory()
-            print(f"Migrated personal_info structure with {len(migrated_keys)} keys organized into {len(new_structure)} categories")
 
     def _get_hierarchical_value(self, key: str) -> tuple[Any, bool]:
         """Get value from hierarchical structure, supporting both flat and dot notation"""
