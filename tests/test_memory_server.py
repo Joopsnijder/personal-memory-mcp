@@ -136,3 +136,52 @@ def test_flexible_categorization(temp_storage):
     # Principle should go to values_insights
     assert "values_insights" in personal_info
     assert "core_principle" in personal_info["values_insights"]
+
+
+def test_misc_reorganization(temp_storage):
+    """Test reorganizing items from misc category"""
+    # Add some items that should stay in misc
+    temp_storage.store_personal_info("misc.random_item", "stays here")
+    temp_storage.store_personal_info("misc.unknown_thing", "also stays")
+    
+    # Add items that should be categorized
+    temp_storage.store_personal_info("misc.email_backup", "test@example.com")
+    temp_storage.store_personal_info("misc.ai_tool", "ChatGPT for writing")
+    temp_storage.store_personal_info("misc.core_value", "Honesty")
+    
+    # Run reorganization
+    result = temp_storage.reorganize_misc_items()
+    
+    assert result["status"] == "success"
+    assert result["moved"] == 3
+    assert result["remaining_in_misc"] == 2
+    
+    # Verify moves
+    personal_info = temp_storage.memory_data["personal_info"]
+    assert "email_backup" in personal_info["basic"]
+    assert "ai_tool" in personal_info["innovations"]  
+    assert "core_value" in personal_info["values_insights"]
+    
+    # Verify items stayed in misc
+    assert "random_item" in personal_info["misc"]
+    assert "unknown_thing" in personal_info["misc"]
+
+
+def test_manual_item_move(temp_storage):
+    """Test manually moving items between categories"""
+    # Add test item
+    temp_storage.store_personal_info("misc.test_item", "test value")
+    
+    # Move it manually
+    result = temp_storage.move_personal_info_item("misc.test_item", "basic.moved_item")
+    
+    assert result["status"] == "success"
+    assert result["value"] == "test value"
+    
+    # Verify move
+    original = temp_storage.get_personal_info("misc.test_item")
+    assert original["found"] is False
+    
+    new_location = temp_storage.get_personal_info("basic.moved_item")
+    assert new_location["found"] is True
+    assert new_location["value"] == "test value"

@@ -41,10 +41,10 @@ The entry point is correctly configured as `memory_server:main` in `pyproject.to
 - Manages 5 data categories: personal_info, preferences, memories, relationships, goals
 - Thread-safe file operations with automatic backup on save
 
-**FastMCP Integration** (`server.py:226-306`)
-- 12 exposed tools for CRUD operations
+**FastMCP Integration** (`memory_server.py:490-561`)
+- 14 exposed tools for CRUD operations and data organization
 - Uses FastMCP library for efficient MCP protocol handling
-- Tools follow naming pattern: `store_*`, `get_*`, `add_*`, `update_*`, `search_*`
+- Tools follow naming pattern: `store_*`, `get_*`, `add_*`, `update_*`, `search_*`, `reorganize_*`, `move_*`
 
 ### Data Structure
 
@@ -106,6 +106,12 @@ The entry point is correctly configured as `memory_server:main` in `pyproject.to
 - **Legacy flat**: `"name"`, `"book_title"`, `"formula_ai_concept"` (backward compatible)
 - **Direct category**: Access entire categories like `"book"` returns all book data
 
+**Data Organization Tools:**
+- **`reorganize_misc_items()`**: Automatically moves items from `misc` to appropriate categories based on keywords
+- **`move_personal_info_item(from_path, to_path)`**: Manually move items between locations
+- **Smart categorization**: New items automatically placed in logical categories
+- **Flexible structure**: Easy to add new categories via dot notation
+
 ## Testing Approach
 
 Expected test file location: `tests/test_memory_server.py`
@@ -115,7 +121,9 @@ Uses pytest with async support for testing MCP tools and storage operations.
 - Basic storage and retrieval operations
 - Hierarchical personal info structure (`test_hierarchical_personal_info`)
 - Backward compatibility with legacy flat keys (`test_backward_compatibility`) 
-- Migration functionality (`test_migration_functionality`)
+- Flexible categorization for new keys (`test_flexible_categorization`)
+- Misc items reorganization (`test_misc_reorganization`)
+- Manual item moving (`test_manual_item_move`)
 - Memory, goals, and preference management
 
 ## Data Storage

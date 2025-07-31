@@ -176,7 +176,7 @@ class PersonalMemoryStorage:
             return "book"
             
         # Innovation/project related  
-        if any(pattern in key_lower for pattern in ['project', 'innovation', 'tool', 'framework', 'canvas']):
+        if any(pattern in key_lower for pattern in ['project', 'innovation', 'tool', 'framework', 'canvas', 'kaartspel', 'game']):
             return "innovations"
             
         # Communication related
@@ -189,6 +189,110 @@ class PersonalMemoryStorage:
             
         # No clear category suggestion
         return None
+
+    def reorganize_misc_items(self) -> dict:
+        """Reorganize items from misc category into appropriate categories"""
+        personal_info = self.memory_data.get("personal_info", {})
+        misc_items = personal_info.get("misc", {})
+        
+        if not misc_items:
+            return {"status": "success", "message": "No misc items to reorganize", "moved": 0}
+        
+        moved_items = []
+        remaining_items = {}
+        
+        for key, value in misc_items.items():
+            suggested_category = self._suggest_category_for_key(key)
+            
+            if suggested_category:
+                # Move to suggested category
+                if suggested_category not in personal_info:
+                    personal_info[suggested_category] = {}
+                
+                personal_info[suggested_category][key] = value
+                moved_items.append({
+                    "key": key,
+                    "from": "misc",
+                    "to": suggested_category
+                })
+            else:
+                # Keep in misc
+                remaining_items[key] = value
+        
+        # Update misc with remaining items
+        if remaining_items:
+            personal_info["misc"] = remaining_items
+        else:
+            # Remove empty misc category
+            if "misc" in personal_info:
+                del personal_info["misc"]
+        
+        if moved_items:
+            self._save_memory()
+        
+        return {
+            "status": "success",
+            "message": f"Reorganized {len(moved_items)} items from misc",
+            "moved": len(moved_items),
+            "moved_items": moved_items,
+            "remaining_in_misc": len(remaining_items)
+        }
+
+    def move_personal_info_item(self, from_path: str, to_path: str) -> dict:
+        """Move a personal info item from one location to another"""
+        # Get source value
+        source_value, found = self._get_hierarchical_value(from_path)
+        if not found:
+            return {"status": "error", "message": f"Source item '{from_path}' not found"}
+        
+        # Set to destination
+        success = self._set_hierarchical_value(to_path, source_value)
+        if not success:
+            return {"status": "error", "message": f"Failed to set destination '{to_path}'"}
+        
+        # Remove from source
+        self._remove_hierarchical_value(from_path)
+        
+        self._save_memory()
+        
+        return {
+            "status": "success",
+            "message": f"Moved '{from_path}' to '{to_path}'",
+            "value": source_value
+        }
+
+    def _remove_hierarchical_value(self, key: str) -> bool:
+        """Remove value from hierarchical structure"""
+        personal_info = self.memory_data.get("personal_info", {})
+        
+        if "." in key:
+            parts = key.split(".")
+            current_dict = personal_info
+            
+            # Navigate to parent
+            for part in parts[:-1]:
+                if isinstance(current_dict, dict) and part in current_dict:
+                    current_dict = current_dict[part]
+                else:
+                    return False
+            
+            # Remove the final key
+            if isinstance(current_dict, dict) and parts[-1] in current_dict:
+                del current_dict[parts[-1]]
+                return True
+        else:
+            # Remove from top level or find in categories
+            if key in personal_info:
+                del personal_info[key]
+                return True
+                
+            # Search in categories
+            for category_data in personal_info.values():
+                if isinstance(category_data, dict) and key in category_data:
+                    del category_data[key]
+                    return True
+        
+        return False
 
     def store_personal_info(self, key: str, value: Any) -> Dict[str, Any]:
         """Store personal information with hierarchical support"""
@@ -443,6 +547,18 @@ def update_goal_status(goal_id: int, status: str) -> dict:
 def get_memory_stats() -> dict:
     """Get statistics and overview of all stored memory data"""
     return storage.get_memory_stats()
+
+
+@mcp.tool()
+def reorganize_misc_items() -> dict:
+    """Automatically reorganize items from misc category into appropriate categories"""
+    return storage.reorganize_misc_items()
+
+
+@mcp.tool()
+def move_personal_info_item(from_path: str, to_path: str) -> dict:
+    """Move a personal info item from one location to another (e.g., 'misc.item' to 'innovations.item')"""
+    return storage.move_personal_info_item(from_path, to_path)
 
 
 def main():
